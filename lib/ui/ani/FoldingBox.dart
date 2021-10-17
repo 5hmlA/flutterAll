@@ -6,6 +6,10 @@ import 'package:flutter/rendering.dart';
 
 import '../Colors.dart';
 
+///  首个，  ===  > __|  反面反转正面不变 （围绕底部旋转 0->0.5）  0.5的时候背面不可见
+///  中间， |__(围绕顶部旋转 -0.5->0)   >  ===  >  __|(围绕底部旋转 0->0.5)  反面反转，正面(后半部分可见)不翻转
+///  末尾,  |  >  ___  (围绕顶部旋转 -0.5->0) 只要正面只旋转正面
+///
 class FoldingBox extends StatefulWidget {
   final List<Container>? childs;
   final Decoration? decoration;
@@ -16,8 +20,15 @@ class FoldingBox extends StatefulWidget {
   final BorderRadius? borderRadius;
 
   FoldingBox(
-      {this.childs, this.foldChild, this.fold = false, this.decoration, this.borderRadius, this.backgroundColor = Colors.white, this.background})
-      : super(key: ObjectKey(childs.hashCode));
+      {Key? key,
+      this.childs,
+      this.foldChild,
+      this.fold = false,
+      this.decoration,
+      this.borderRadius,
+      this.backgroundColor = Colors.white,
+      this.background})
+      : super(key: key ?? UniqueKey());
 
   static FoldingBoxState of(BuildContext context) {
     return context.findAncestorStateOfType<FoldingBoxState>()!;
@@ -62,6 +73,11 @@ class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMi
     if (childSize <= 3) {
       _animationControl = AnimationController(vsync: this, duration: Duration(seconds: 1));
       _heightAnimation = CurvedAnimation(parent: _animationControl, curve: Curves.easeOutBack);
+      /// 1--0 展开  1 为折叠状态
+      animation = Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeInOut)).animate(_animationControl);
+      if (widget.fold) {
+        animation = _animationControl.drive(CurveTween(curve: Curves.easeInOut));
+      }
     } else {
       _animationControl = AnimationController(vsync: this, duration: Duration(seconds: 2 * (childSize / 3).floor()));
 
@@ -126,7 +142,7 @@ class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMi
   /// 折叠到展开  0-1
   /// 1, 围绕底部旋转 0-90     折叠状态 0
   /// 2，围绕顶部 90-0(-0>-90)，，围绕底部 0-90(要显示holder)  折叠状态 -90
-  /// 3，围绕顶部 90-0     折叠状态 90
+  /// 3，围绕顶部 90-0     折叠状态 90 ---> 0 折叠到展开
   foldAbleLayout(BuildContext context) {
     return Container(
       decoration: widget.decoration,
@@ -187,6 +203,55 @@ class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMi
   }
 }
 
+/// 折叠到展开  0-1
+/// 1, 围绕底部旋转 0-90     折叠状态 0
+/// 2，围绕顶部 90-0(-0>-90)，，围绕底部 0-90(要显示holder)  折叠状态 -90
+/// 3，围绕顶部 90-0     折叠状态 90
+// class FlipBox extends AnimatedWidget {
+@immutable
+class FlipBox extends StatelessWidget {
+  final Animation<double> animation;
+  final Widget child;
+  final Widget? holderChild;
+
+  const FlipBox({
+    Key? key,
+    required this.animation,
+    this.holderChild,
+    required this.child,
+  }) : super(key: key);
+
+  /// 折叠到展开  0-1
+  /// 1, 围绕底部旋转 0-90     折叠状态 0           0,0.5
+  /// 2，围绕顶部 90-0(-90>0)，，围绕底部 0-90(要显示holder)  折叠状态 -90  -.5,.5
+  /// 3，围绕顶部 90-0     折叠状态 90           -.5,0
+  @override
+  Widget build(BuildContext context) {
+    double progress = animation.value;
+    final radians = progress.abs() * pi;
+    if (progress == -.5) {
+      ///折叠起来之后就不需要占位置了
+      return SizedBox.shrink();
+    }
+
+    if (holderChild != null && progress > 0) {
+      return Stack(
+        children: [
+          holderChild!, //显示正面view
+          Transform(
+              transform: Matrix4.rotationX(radians),
+              alignment: progress < 0 ? AlignmentDirectional.topCenter : AlignmentDirectional.bottomCenter,
+              child: child),
+        ],
+      );
+    }
+    return Transform(
+        transform: Matrix4.rotationX(radians),
+        alignment: progress < 0 ? AlignmentDirectional.topCenter : AlignmentDirectional.bottomCenter,
+        child: child);
+  }
+}
+
 class FlipBoxTest extends StatefulWidget {
   @override
   _FlipTestState createState() => _FlipTestState();
@@ -237,54 +302,5 @@ class _FlipTestState extends State<FlipBoxTest> with SingleTickerProviderStateMi
         }
       }),
     );
-  }
-}
-
-/// 折叠到展开  0-1
-/// 1, 围绕底部旋转 0-90     折叠状态 0
-/// 2，围绕顶部 90-0(-0>-90)，，围绕底部 0-90(要显示holder)  折叠状态 -90
-/// 3，围绕顶部 90-0     折叠状态 90
-// class FlipBox extends AnimatedWidget {
-@immutable
-class FlipBox extends StatelessWidget {
-  final Animation<double> animation;
-  final Widget child;
-  final Widget? holderChild;
-
-  const FlipBox({
-    Key? key,
-    required this.animation,
-    this.holderChild,
-    required this.child,
-  }) : super(key: key);
-
-  /// 折叠到展开  0-1
-  /// 1, 围绕底部旋转 0-90     折叠状态 0           0,0.5
-  /// 2，围绕顶部 90-0(-90>0)，，围绕底部 0-90(要显示holder)  折叠状态 -90  -.5,.5
-  /// 3，围绕顶部 90-0     折叠状态 90           -.5,0
-  @override
-  Widget build(BuildContext context) {
-    double progress = animation.value;
-    final radians = progress.abs() * pi;
-    if (progress == -.5) {
-      ///折叠起来之后就不需要占位置了
-      return SizedBox.shrink();
-    }
-
-    if (holderChild != null && progress > 0) {
-      return Stack(
-        children: [
-          holderChild!, //显示正面view
-          Transform(
-              transform: Matrix4.rotationX(radians),
-              alignment: progress < 0 ? AlignmentDirectional.topCenter : AlignmentDirectional.bottomCenter,
-              child: child),
-        ],
-      );
-    }
-    return Transform(
-        transform: Matrix4.rotationX(radians),
-        alignment: progress < 0 ? AlignmentDirectional.topCenter : AlignmentDirectional.bottomCenter,
-        child: child);
   }
 }

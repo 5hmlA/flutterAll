@@ -48,6 +48,7 @@ class MyHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('---');
     return Container(
       color: Colors.blueAccent[100],
       child: Center(
@@ -59,10 +60,11 @@ class MyHomePage extends StatelessWidget {
 
   ListView buildListView() {
     return ListView.builder(
-      itemCount: 2,
+      itemCount: 12,
       itemBuilder: (BuildContext context, int inde) {
         return FoldingBox(
-          fold: inde == 1,
+          key: ValueKey(inde),
+          fold: inde != 0,
             childs: List.generate(titles.length, (index) {
               if (index == 0) {
                 return Container(

@@ -46,19 +46,24 @@ class _BlendokuState extends State<Blendoku> {
       child: Container(
         padding: EdgeInsets.only(top: 140),
         color: Colors.blueAccent,
-        child: Stack(
-          alignment: AlignmentDirectional.center,
-          children: List.generate(
-              4,
-              (index) => BlendokuWithPosition(
+        child: Builder(
+          builder: (BuildContext context) {
+            RenderBox box = context.findRenderObject() as RenderBox;
+            return Stack(
+              alignment: AlignmentDirectional.center,
+              children: List.generate(
+                  4,
+                      (index) => BlendokuWithPosition(
                     index * (size + 8),
                     0,
                     _colors.elementAt(index),
-                    (data) {
+                        (data) {
                       print("dragupdate ${data.localPosition.dy}");
-                      print("dragupdate ${data.globalPosition.dy}");
+                      print("dragupdate ${box.localToGlobal(Offset.zero)}");
                     },
                   )),
+            );
+          },
         ),
       ),
     );
@@ -80,6 +85,7 @@ class BlendokuWithPosition extends StatelessWidget {
     return AnimatedPositioned(
       top: top,
       left: left,
+      width: 200,
       duration: Duration(seconds: 2),
       child: Draggable(
         feedback: container,
