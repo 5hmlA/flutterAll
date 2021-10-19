@@ -41,43 +41,6 @@ class MyApp extends StatelessWidget {
 }
 
 
-foldCardTest() {
-  return Container(
-    padding: EdgeInsets.only(top: 50),
-    child: DefaultTextStyle(
-      style: TextStyle(color: Colors.white, fontSize: 20),
-      child: ListView.builder(
-        itemCount: 2,
-        itemBuilder: (BuildContext context, int index) {
-          return Folding(
-              childs: List.generate(4, (index) {
-                if (index == 0) {
-                  return Container(
-                    width: 200,
-                    height: 100,
-                    child: Builder(
-                      builder: (BuildContext context) => centerText("正面 $index", color: Colors.primaries[index], onPressed: () {
-                        Folding.of(context).toTold();
-                      }),
-                    ),
-                  );
-                } else {
-
-                  return centerText("正面333 $index", color: Colors.primaries[index],onPressed: (){});
-                }
-              }),
-              foldChild: Container(
-                child: Builder(
-                    builder: (context) => centerText("折叠的封面", color: randomColor(), onPressed: () {
-                      Folding.of(context).expand();
-                    })),
-              ));
-        },
-      ),
-    ),
-  );
-}
-
 foldCardTest2() {
   return Container(
     padding: EdgeInsets.only(top: 50),
@@ -94,7 +57,7 @@ foldCardTest2() {
                     height: 100,
                     child: Builder(
                       builder: (BuildContext context) => centerText("正面 $index", color: Colors.primaries[index], onPressed: () {
-                        FoldCard.of(context).toTold();
+                        FoldCard.of(context).toggle();
                       }),
                     ),
                   );
@@ -106,7 +69,7 @@ foldCardTest2() {
               foldChild: Container(
                 child: Builder(
                     builder: (context) => centerText("折叠的封面", color: randomColor(), onPressed: () {
-                      FoldCard.of(context).expand();
+                      FoldCard.of(context).toggle();
                     })),
               ));
         },

@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterf/ui/Colors.dart';
 import 'package:flutterf/ui/ani/Breathe.dart';
+import 'package:flutterf/ui/ani/Carousel.dart';
+import 'package:flutterf/ui/ani/FoldCard.dart';
 import 'package:flutterf/ui/ani/Folding.dart';
 import 'package:flutterf/ui/ani/FoldingBox.dart';
 import 'package:flutterf/ui/game/Blendoku.dart';
@@ -44,15 +46,23 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatelessWidget {
-  List<String> titles = ["Fold","Arithmetic","Breathe","SnowMain","BlendokuPage",];
+  List<String> titles = [
+    "Fold",
+    "Arithmetic",
+    "Breathe",
+    "SnowMain",
+    "BlendokuPage",
+  ];
 
   @override
   Widget build(BuildContext context) {
-    print('---');
     return Container(
       color: Colors.blueAccent[100],
       child: Center(
         child: buildListView(),
+        // child: FoldingDemo(),
+        // child: FoldingBoxDemo(),
+        // child: CarouselLayoutDemo(),
       ),
       padding: EdgeInsets.fromLTRB(24, 24, 24, 0),
     );
@@ -60,11 +70,11 @@ class MyHomePage extends StatelessWidget {
 
   ListView buildListView() {
     return ListView.builder(
-      itemCount: 12,
+      itemCount: 3,
       itemBuilder: (BuildContext context, int inde) {
-        return FoldingBox(
-          key: ValueKey(inde),
-          fold: inde != 0,
+        return CarouselLayout(
+            key: ValueKey(inde),
+            foldState: inde == 0,
             childs: List.generate(titles.length, (index) {
               if (index == 0) {
                 return Container(
@@ -72,7 +82,7 @@ class MyHomePage extends StatelessWidget {
                   height: 100,
                   child: Builder(
                     builder: (BuildContext context) => centerText(titles[index], color: Colors.primaries[index], onPressed: () {
-                      FoldingBox.of(context).toTold();
+                      CarouselLayout.of(context).toggle();
                     }),
                   ),
                 );
@@ -85,7 +95,7 @@ class MyHomePage extends StatelessWidget {
             foldChild: Container(
               child: Builder(
                   builder: (context) => centerText("Unfold", color: randomColor(), onPressed: () {
-                        FoldingBox.of(context).expand();
+                        CarouselLayout.of(context).toggle();
                       })),
             ));
       },

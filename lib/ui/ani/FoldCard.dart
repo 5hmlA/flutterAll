@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../Colors.dart';
 
+/// 首个view 不旋转  折叠的时候 有下面一个view折叠后绘制的，但是下面的view还暂着空间
+/// 非首个view都支持旋转，折叠之后(1)变为上个view 只显示自己的折叠状态
+/// 缺点是当完全折叠之后 只有首个位置能看到view但是显示的背景view是第二个view折叠后的，所以实际上第二个view还占着位置
 class FoldCard extends StatefulWidget {
   final List<Container>? childs;
 
@@ -13,7 +16,7 @@ class FoldCard extends StatefulWidget {
   final Widget? foldChild;
   final backgroundColor;
 
-  FoldCard({this.childs, this.foldChild, this.foldState = false, this.backgroundColor = Colors.white}) : super(key: ObjectKey(childs.hashCode));
+  FoldCard({Key? key,this.childs, this.foldChild, this.foldState = false, this.backgroundColor = Colors.white}) : super(key: key);
 
   static FoldCardState of(BuildContext context) {
     return context.findAncestorStateOfType<FoldCardState>()!;
@@ -31,15 +34,7 @@ class FoldCardState extends State<FoldCard> with SingleTickerProviderStateMixin 
   double aniChangeHeight = 0;
   double minHeight = 0;
 
-  void expand() {
-    if (_animationControl.value == 1) {
-      _animationControl.reverse();
-    } else {
-      _animationControl.forward();
-    }
-  }
-
-  void toTold() {
+  void toggle() {
     if (_animationControl.value == 1) {
       _animationControl.reverse();
     } else {
@@ -57,7 +52,7 @@ class FoldCardState extends State<FoldCard> with SingleTickerProviderStateMixin 
     if (childSize < 3) {
       _animationControl = AnimationController(vsync: this, duration: Duration(seconds: 1));
     } else {
-      _animationControl = AnimationController(vsync: this, duration: Duration(seconds: 2 * (childSize / 3).floor()));
+      _animationControl = AnimationController(vsync: this, duration: Duration(seconds: 12 * (childSize / 3).floor()));
     }
     _animationControl.addListener(() {
       setState(() {});
@@ -172,3 +167,59 @@ class RotationAni extends AnimatedWidget {
     return Transform(transform: Matrix4.rotationX(progress), alignment: AlignmentDirectional.topCenter, child: showChild);
   }
 }
+
+/// ======================= demo ===============================
+//region FoldingBoxDemo
+class FoldCardDemo extends StatelessWidget {
+  List<String> titles = [
+    "Fold",
+    "Arithmetic",
+    "Breathe",
+    // "SnowMain",
+    // "BlendokuPage",
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        body: Container(
+          padding: EdgeInsets.all(50),
+          child: buildListView(),
+        ));
+  }
+
+  ListView buildListView() {
+    return ListView.builder(
+      itemCount: 2,
+      itemBuilder: (BuildContext context, int inde) {
+        return FoldCard(
+            key: ValueKey(inde),
+            foldState: inde == 0,
+            childs: List.generate(titles.length, (index) {
+              if (index == 0) {
+                return Container(
+                  width: 200,
+                  height: 100,
+                  child: Builder(
+                    builder: (BuildContext context) => centerText(titles[index], color: Colors.primaries[index], onPressed: () {
+                      FoldCard.of(context).toggle();
+                    }),
+                  ),
+                );
+              } else {
+                return centerTextButton(titles[index], color: Colors.primaries[index], onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(titles[index])));
+                });
+              }
+            }),
+            foldChild: Container(
+              child: Builder(
+                  builder: (context) => centerText("Unfold", color: randomColor(), onPressed: () {
+                    FoldCard.of(context).toggle();
+                  })),
+            ));
+      },
+    );
+  }
+}
+//endregion

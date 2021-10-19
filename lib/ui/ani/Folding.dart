@@ -6,16 +6,20 @@ import 'package:flutter/rendering.dart';
 
 import '../Colors.dart';
 
+/// 首个view叠加的是两个，底部的是第一个view不做动画，上面叠加的是折叠后显示的，当展开的时候，上面叠加的view
+/// 向下翻转做动画，翻转到180完全展开，作为第二个view显示， 原来布局在第二个view的控件 向下翻转到180 作为第三个view显示
+/// 会导致一个问题，最后一个view 其实是上一个view通过transform之后显示的，实际上那个位置并没有view,在他的父widget就不包括这部分空间
+/// 从而无法响应点击事件
 class Folding extends StatefulWidget {
   final List<Container>? childs;
   final Decoration? decoration;
-  final bool fold;
+  final bool foldState;
   final Container? foldChild;
   final backgroundColor;
   final BorderRadius? borderRadius;
 
-  Folding({this.childs, this.foldChild, this.fold = true, this.decoration, this.borderRadius, this.backgroundColor = Colors.white})
-      : super(key: ObjectKey(childs.hashCode));
+  Folding({Key? key, this.childs, this.foldChild, this.foldState = true, this.decoration, this.borderRadius, this.backgroundColor = Colors.white})
+      : super(key: key);
 
   static FoldingState of(BuildContext context) {
     return context.findAncestorStateOfType<FoldingState>()!;
@@ -33,15 +37,7 @@ class FoldingState extends State<Folding> with SingleTickerProviderStateMixin {
   double aniChangeHeight = 0;
   double minHeight = 0;
 
-  void expand() {
-    if (_animationControl.value == 1) {
-      _animationControl.reverse();
-    } else {
-      _animationControl.forward();
-    }
-  }
-
-  void toTold() {
+  void toggle() {
     if (_animationControl.value == 1) {
       _animationControl.reverse();
     } else {
@@ -67,7 +63,7 @@ class FoldingState extends State<Folding> with SingleTickerProviderStateMixin {
 
     /// 0--1 展开
     animation = Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeInOut)).animate(_animationControl);
-    if (widget.fold) {
+    if (widget.foldState) {
       animation = _animationControl.drive(CurveTween(curve: Curves.easeInOut));
     }
     if (childSize > 2) {
@@ -235,8 +231,6 @@ class Flip extends AnimatedWidget {
     } else {
       this.child = child;
     }
-
-    print("<<<<<<<<<< $holderChild");
     if (holderChild != null) {
       this.holderChild = Transform(
         transform: Matrix4.rotationX(pi),
@@ -271,4 +265,60 @@ class Flip extends AnimatedWidget {
     return Transform(transform: Matrix4.rotationX(progress), alignment: AlignmentDirectional.bottomCenter, child: showChild);
   }
 
+}
+
+/// ======================= demo ===============================
+class FoldingDemo extends StatelessWidget {
+  List<String> titles = [
+    "Fold",
+    "Arithmetic",
+    "Breathe",
+    "SnowMain",
+    "BlendokuPage",
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        body: Container(
+          padding: EdgeInsets.all(50),
+          child: buildListView(),
+        ));
+  }
+
+  ListView buildListView() {
+    return ListView.builder(
+      itemCount: 2,
+      itemBuilder: (BuildContext context, int inde) {
+        return Folding(
+            key: ValueKey(inde),
+            foldState: inde == 0,
+            childs: List.generate(titles.length, (index) {
+              if (index == 0) {
+                return Container(
+                  width: 200,
+                  height: 100,
+                  child: Builder(
+                    builder: (BuildContext context) =>
+                        centerText(titles[index], color: Colors.primaries[index], onPressed: () {
+                          Folding.of(context).toggle();
+                        }),
+                  ),
+                );
+              } else {
+                return centerTextButton(titles[index], color: Colors.primaries[index], onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(titles[index])));
+                });
+              }
+            }),
+            foldChild: Container(
+              child: Builder(
+                  builder: (context) =>
+                      centerText("Unfold", color: randomColor(), onPressed: () {
+                        Folding.of(context).toggle();
+                      })),
+            ));
+      },
+    );
+  }
 }

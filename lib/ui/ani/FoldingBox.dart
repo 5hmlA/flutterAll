@@ -13,22 +13,22 @@ import '../Colors.dart';
 class FoldingBox extends StatefulWidget {
   final List<Container>? childs;
   final Decoration? decoration;
-  final bool fold;
+  final bool foldState;
   final Container? foldChild;
   final Color backgroundColor;
   final Widget? background;
   final BorderRadius? borderRadius;
 
-  FoldingBox(
+  const FoldingBox(
       {Key? key,
       this.childs,
       this.foldChild,
-      this.fold = false,
+      this.foldState = false,
       this.decoration,
       this.borderRadius,
       this.backgroundColor = Colors.white,
       this.background})
-      : super(key: key ?? UniqueKey());
+      : super(key: key);
 
   static FoldingBoxState of(BuildContext context) {
     return context.findAncestorStateOfType<FoldingBoxState>()!;
@@ -40,21 +40,13 @@ class FoldingBox extends StatefulWidget {
 
 class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMixin {
   late AnimationController _animationControl;
-  late List<Animation<double>> _animations;
+  late List<Animation<double>> _unfoldAnimations;
   late Animation<double> _heightAnimation;
   var childSize = 0;
   double aniChangeHeight = 0;
   double minHeight = 0;
 
-  void expand() {
-    if (_animationControl.value == 1) {
-      _animationControl.reverse();
-    } else {
-      _animationControl.forward();
-    }
-  }
-
-  void toTold() {
+  void toggle() {
     if (_animationControl.value == 1) {
       _animationControl.reverse();
     } else {
@@ -69,34 +61,23 @@ class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMi
     minHeight = widget.childs!.first.constraints!.maxHeight;
     aniChangeHeight = aniChangeHeight - minHeight;
     childSize = widget.childs!.length;
-    Animation<double>? animation;
+    Animation<double>? unfoldAnimation;
     if (childSize <= 3) {
       _animationControl = AnimationController(vsync: this, duration: Duration(seconds: 1));
-      _heightAnimation = CurvedAnimation(parent: _animationControl, curve: Curves.easeOutBack);
-      /// 1--0 展开  1 为折叠状态
-      animation = Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeInOut)).animate(_animationControl);
-      if (widget.fold) {
-        animation = _animationControl.drive(CurveTween(curve: Curves.easeInOut));
-      }
     } else {
       _animationControl = AnimationController(vsync: this, duration: Duration(seconds: 2 * (childSize / 3).floor()));
-
-      /// 1--0 展开  1 为折叠状态
-      animation = Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeInOut)).animate(_animationControl);
-      if (widget.fold) {
-        animation = _animationControl.drive(CurveTween(curve: Curves.easeInOut));
-      }
-
-      if (childSize == 3) {
-        _heightAnimation = CurvedAnimation(parent: animation, curve: Cubic(0.775, 0.685, 0.12, 1.05));
-      } else {
-        _heightAnimation = CurvedAnimation(parent: animation, curve: Cubic(0.75, 0.82, 0.08, 1.05));
-      }
     }
+
+    /// 0--1 折叠 --> 展开  0为折叠状态
+    unfoldAnimation = Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeInOut)).animate(_animationControl);
+    if (widget.foldState) {
+      unfoldAnimation = _animationControl.drive(CurveTween(curve: Curves.easeInOut));
+    }
+    _heightAnimation = CurvedAnimation(parent: unfoldAnimation, curve: Cubic(0.75, 0.82, 0.08, 1.15));
 
     if (childSize > 1) {
       double interval = 1.0 / (childSize);
-      _animations = List.generate(childSize, (index) {
+      _unfoldAnimations = List.generate(childSize, (index) {
         double begin, end = 0;
         if (index == 0) {
           begin = 0;
@@ -109,10 +90,10 @@ class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMi
           end = .5;
         }
         Tween<double> foldTween = Tween(begin: begin, end: end);
-        return foldTween.chain(CurveTween(curve: Interval(index * interval, (index + 1) * interval))).animate(animation!);
+        return foldTween.chain(CurveTween(curve: Interval(index * interval, (index + 1) * interval))).animate(unfoldAnimation!);
       });
     } else {
-      _animations = [animation!];
+      _unfoldAnimations = [unfoldAnimation];
     }
 
     _animationControl.addListener(() {
@@ -157,7 +138,7 @@ class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMi
               children: [
                 child,
                 FlipBox(
-                  animation: _animations[index],
+                  animation: _unfoldAnimations[index],
                   child: widget.foldChild!,
                 ),
               ],
@@ -165,7 +146,7 @@ class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMi
           }
           if (index == childSize - 1) {
             return FlipBox(
-              animation: _animations[index],
+              animation: _unfoldAnimations[index],
               child: child,
             );
           }
@@ -176,29 +157,12 @@ class FoldingBoxState extends State<FoldingBox> with SingleTickerProviderStateMi
                 color: widget.backgroundColor,
               );
           return FlipBox(
-            animation: _animations[index],
+            animation: _unfoldAnimations[index],
             child: background,
             holderChild: child,
           );
         }),
       ),
-    );
-  }
-
-  getFirstAniHolder(int index, background) {
-    if (childSize == 2) {
-      return FlipBox(
-        animation: _animationControl,
-        child: widget.childs!.elementAt(1),
-        holderChild: widget.childs!.elementAt(1),
-      );
-    }
-    return FlipBox(
-      animation: _animations[index],
-      child: background,
-
-      /// 展开完全后显示下一个widget
-      holderChild: widget.childs!.elementAt(1 + index),
     );
   }
 }
@@ -252,11 +216,11 @@ class FlipBox extends StatelessWidget {
   }
 }
 
+//region FlipBoxTest
 class FlipBoxTest extends StatefulWidget {
   @override
   _FlipTestState createState() => _FlipTestState();
 }
-
 /// animation 0 反面 --- 1 正面
 class _FlipTestState extends State<FlipBoxTest> with SingleTickerProviderStateMixin {
   late AnimationController _animationControl;
@@ -304,3 +268,60 @@ class _FlipTestState extends State<FlipBoxTest> with SingleTickerProviderStateMi
     );
   }
 }
+//endregion
+
+/// ======================= demo ===============================
+//region FoldingBoxDemo
+class FoldingBoxDemo extends StatelessWidget {
+  List<String> titles = [
+    "Fold",
+    "Arithmetic",
+    "Breathe",
+    "SnowMain",
+    "BlendokuPage",
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        body: Container(
+      padding: EdgeInsets.all(50),
+      child: buildListView(),
+    ));
+  }
+
+  ListView buildListView() {
+    return ListView.builder(
+      itemCount: 2,
+      itemBuilder: (BuildContext context, int inde) {
+        return FoldingBox(
+            key: ValueKey(inde),
+            foldState: inde == 0,
+            childs: List.generate(titles.length, (index) {
+              if (index == 0) {
+                return Container(
+                  width: 200,
+                  height: 100,
+                  child: Builder(
+                    builder: (BuildContext context) => centerText(titles[index], color: Colors.primaries[index], onPressed: () {
+                      FoldingBox.of(context).toggle();
+                    }),
+                  ),
+                );
+              } else {
+                return centerTextButton(titles[index], color: Colors.primaries[index], onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(titles[index])));
+                });
+              }
+            }),
+            foldChild: Container(
+              child: Builder(
+                  builder: (context) => centerText("Unfold", color: randomColor(), onPressed: () {
+                        FoldingBox.of(context).toggle();
+                      })),
+            ));
+      },
+    );
+  }
+}
+//endregion

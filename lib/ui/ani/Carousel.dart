@@ -19,16 +19,17 @@ class CarouselLayout extends StatefulWidget {
   final BorderRadius? borderRadius;
   final int duration;
 
-  CarouselLayout(
-      {this.childs,
-        this.foldChild,
-        this.foldState = false,
-        this.decoration,
-        this.duration = 8,
-        this.borderRadius,
-        this.backgroundColor = Colors.white,
-        this.background})
-      : super(key: ObjectKey(childs.hashCode));
+  const CarouselLayout(
+      {Key? key,
+      this.childs,
+      this.foldChild,
+      this.foldState = false,
+      this.decoration,
+      this.duration = 1000,
+      this.borderRadius,
+      this.backgroundColor = Colors.white,
+      this.background})
+      : super(key: key);
 
   static CarouselLayoutState of(BuildContext context) {
     return context.findAncestorStateOfType<CarouselLayoutState>()!;
@@ -40,9 +41,9 @@ class CarouselLayout extends StatefulWidget {
 
 class CarouselLayoutState extends State<CarouselLayout> with SingleTickerProviderStateMixin {
   late AnimationController _animationControl;
-  late List<Animation<double>> _unFoldAnimations;
+  late List<Animation<double>> _unfoldAnimations;
   var childSize = 0;
-  late List<Animation<double>> _heightAnimations;
+  List<Animation<double>>? _heightAnimations;
 
   void toggle() {
     if (_animationControl.value == 1) {
@@ -63,25 +64,30 @@ class CarouselLayoutState extends State<CarouselLayout> with SingleTickerProvide
     childSize = widget.childs!.length;
 
     if (childSize <= 3) {
-      _animationControl = AnimationController(vsync: this, duration: Duration(seconds: widget.duration));
+      _animationControl = AnimationController(vsync: this, duration: Duration(milliseconds: widget.duration));
     } else {
-      _animationControl = AnimationController(vsync: this, duration: Duration(seconds: widget.duration * (childSize / 3).floor()));
+      _animationControl = AnimationController(vsync: this, duration: Duration(milliseconds: widget.duration * (childSize / 2).floor()));
     }
 
-    Animation<double> heightAnimation; //高度animation
-    Animation<double> unFoldAnimation; //展开animation
-    if (widget.foldState) {
-      //折叠状态 0-1展开 0为折叠着  1为展开
-      heightAnimation = CurvedAnimation(parent: _animationControl, curve: Cubic(0.75, 0.82, 0.08, 1));
-      unFoldAnimation = _animationControl.drive(CurveTween(curve: Curves.easeInOut));
-    } else {
+    Animation<double>? heightAnimation; //高度animation
+    Animation<double> unfoldAnimation; //展开animation
+    //折叠状态 0-1展开 0为折叠着  1为展开
+    // _animationControl = 0;/// default
+    if (!widget.foldState) {
       //展开状态 1为展开 下一个动画是 (1-0) 0为折叠，
-      unFoldAnimation = Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeInOut)).animate(_animationControl);
-      heightAnimation = CurvedAnimation(parent: _animationControl, curve: Cubic(0.75, 0.82, 0.08, 1)).drive(Tween(begin: 1.0, end: 0.0));
+      _animationControl.value = 1;
     }
+    unfoldAnimation = _animationControl.drive(CurveTween(curve: Curves.easeInOut));
+    heightAnimation = CurvedAnimation(
+      parent: _animationControl,
+      curve: Cubic(0.75, 0.82, 0.08, 1.25),
+    );
     if (childSize > 1) {
       double interval = 1.0 / (childSize);
-      _unFoldAnimations = List.generate(childSize, (index) {
+      _unfoldAnimations = List.generate(childSize, (index) {
+        /// (Tween(begin: 0, end: .5)); //首个
+        /// Tween(begin: -.50,end: .5));//中间
+        /// (Tween(begin: -.5, end: 0)); //最后
         double begin, end = 0;
         if (index == 0) {
           begin = 0;
@@ -94,14 +100,23 @@ class CarouselLayoutState extends State<CarouselLayout> with SingleTickerProvide
           end = .5;
         }
         Tween<double> foldTween = Tween(begin: begin, end: end);
-        return foldTween.chain(CurveTween(curve: Interval(index * interval, (index + 1) * interval))).animate(unFoldAnimation);
+        return foldTween.chain(CurveTween(curve: Interval(index * interval, (index + 1) * interval))).animate(unfoldAnimation);
       });
 
-      /// 第一个item高度不用变
-      interval = 1.0 / (childSize - 1);
-      _heightAnimations = List.generate(childSize - 1, (index) {
-        return CurveTween(curve: Interval(index * interval, (index + 1) * interval)).animate(heightAnimation);
-      });
+      if (heightAnimation != null) {
+        /// 第一个item高度不用变
+        interval = 1.0 / (childSize - 1);
+        _heightAnimations = List.generate(childSize - 1, (index) {
+          var animatable;
+          if (index == childSize - 2) {
+            animatable = CurveTween(curve: IntervalOver1(index * interval, (index + 1) * interval));
+            animatable.chain(CurveTween(curve: Curves.easeOutBack));
+          } else {
+            animatable = CurveTween(curve: IntervalSafe(index * interval, (index + 1) * interval));
+          }
+          return animatable.animate(heightAnimation!);
+        });
+      }
     }
 
     _animationControl.addListener(() {
@@ -120,7 +135,6 @@ class CarouselLayoutState extends State<CarouselLayout> with SingleTickerProvide
   @override
   Widget build(BuildContext context) {
     var result = foldAbleLayout(context);
-
     if (widget.borderRadius != null) {
       result = ClipRRect(
         key: ValueKey(0),
@@ -147,7 +161,7 @@ class CarouselLayoutState extends State<CarouselLayout> with SingleTickerProvide
           if (index == 0) {
             return Carousel(
               key: ValueKey(index),
-              spinProgress: _unFoldAnimations[index].value,
+              spinProgress: _unfoldAnimations[index].value,
 
               /// 第一个item高度永远不变
               // heightProgress: _heightAnimations[index].value,
@@ -158,8 +172,8 @@ class CarouselLayoutState extends State<CarouselLayout> with SingleTickerProvide
           if (index == childSize - 1) {
             return Carousel(
               key: ValueKey(index),
-              spinProgress: _unFoldAnimations[index].value,
-              // heightProgress: _heightAnimations[index - 1].value,
+              spinProgress: _unfoldAnimations[index].value,
+              heightProgress: _heightAnimations == null ? null : _heightAnimations![index - 1].value,
               child: child,
             );
           }
@@ -169,8 +183,8 @@ class CarouselLayoutState extends State<CarouselLayout> with SingleTickerProvide
               );
           return Carousel(
             key: ValueKey(index),
-            spinProgress: _unFoldAnimations[index].value,
-            // heightProgress: _heightAnimations[index - 1].value,
+            spinProgress: _unfoldAnimations[index].value,
+            heightProgress: _heightAnimations == null ? null : _heightAnimations![index - 1].value,
             child: child,
             back: background,
           );
@@ -183,28 +197,24 @@ class CarouselLayoutState extends State<CarouselLayout> with SingleTickerProvide
 class Carousel extends MultiChildRenderObjectWidget {
   final Widget child; //正常view
   final Widget? back; //旋转view
-  final double spinProgress;
-  final double? heightProgress;
+  late double spinProgress;
+  double? heightProgress;
 
-  /// 为啥必须要有key才显示动画
   Carousel({
     Key? key,
     required this.child,
     required this.spinProgress,
     this.heightProgress,
     this.back,
-  }) : super(key: UniqueKey(), children: back == null ? [child] : [child, back]);
+  }) : super(key: key, children: back == null ? [child] : [child, back]);
 
   @override
   MultiChildRenderObjectElement createElement() {
-    print("createElement > [] === \n${StackTrace.current}");
     return super.createElement();
   }
 
   @override
   CarouselRenderObject createRenderObject(BuildContext context) {
-    // print("createRenderObject > [context] === \n${StackTrace.current}");
-    print("createRenderObject > [context] === ");
     return CarouselRenderObject(
       spinProgress: spinProgress,
       heightProgress: heightProgress,
@@ -214,25 +224,53 @@ class Carousel extends MultiChildRenderObjectWidget {
 
   @override
   void updateRenderObject(BuildContext context, covariant CarouselRenderObject renderObject) {
-    renderObject.spinProgress = spinProgress;
-    renderObject.heightProgress = heightProgress;
+    renderObject
+      ..spinProgress = spinProgress
+      ..highProgress = heightProgress;
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(DoubleProperty('spinProgress', spinProgress));
+    properties.add(DoubleProperty('heightProgress', heightProgress));
   }
 }
 
 class CarouselRenderObject extends RenderStack {
-  double spinProgress;
-  double? heightProgress;
-  Size orignSize = Size.zero;
+  Size _originalSize = Size.zero;
+
+  late double _spinProgress;
+  double? _heightProgress;
+
+  double get spinProgress => _spinProgress;
+
+  double? get highProgress => _heightProgress;
+  Matrix4? _rotateTransform;
+
+  set spinProgress(double value) {
+    _spinProgress = value;
+    markNeedsLayout();
+
+    /// 类似 invalidate() 更新了属性要主动刷新下
+  }
+
+  set highProgress(double? value) {
+    _heightProgress = value;
+  }
 
   CarouselRenderObject({
     TextDirection? textDirection,
-    this.heightProgress,
-    required this.spinProgress,
+    double? heightProgress,
+    required double spinProgress,
   }) : super(
-    textDirection: textDirection,
-    fit: StackFit.loose,
-    clipBehavior: Clip.hardEdge,
-  );
+          textDirection: textDirection,
+          fit: StackFit.loose,
+          clipBehavior: Clip.hardEdge,
+        ) {
+    _spinProgress = spinProgress;
+    _heightProgress = _heightProgress;
+  }
 
   @override
   void performLayout() {
@@ -244,14 +282,14 @@ class CarouselRenderObject extends RenderStack {
 
     if (spinProgress == -.5) {
       ///折叠起来之后就不需要占位置了
-      if (heightProgress == null || heightProgress == 0) {
+      firstChild!.layout(constraints, parentUsesSize: true);
+      if (highProgress == null || highProgress == 0) {
         size = Size.zero;
       } else {
         //不可见的时候 先增加高度
-        firstChild!.layout(constraints, parentUsesSize: true);
-        orignSize = size = firstChild!.size;
-        if (heightProgress != null && heightProgress! > 0) {
-          size = Size(size.width, heightProgress! * size.height);
+        _originalSize = size = firstChild!.size;
+        if (highProgress != null && highProgress! > 0) {
+          size = Size(size.width, highProgress! * size.height);
         }
       }
       return;
@@ -259,14 +297,14 @@ class CarouselRenderObject extends RenderStack {
 
     // cos a * 斜边 = 夹角边长(邻边)
     firstChild!.layout(constraints, parentUsesSize: true);
-    orignSize = size = firstChild!.size;
+    _originalSize = size = firstChild!.size;
     firstChild!.layout(BoxConstraints.tight(size), parentUsesSize: false);
 
     if (childCount == 2) {
       lastChild!.layout(BoxConstraints.tight(size), parentUsesSize: true);
     }
-    if (heightProgress != null && heightProgress! > 0) {
-      size = Size(size.width, heightProgress! * size.height);
+    if (highProgress != null && highProgress! > 0) {
+      size = Size(size.width, highProgress! * size.height);
     } else {
       //没有高度变化的控制就自己变化高度
       if (spinProgress < 0) {
@@ -281,7 +319,6 @@ class CarouselRenderObject extends RenderStack {
     /// 1, 围绕底部旋转 0-90     折叠状态 0           0,0.5
     /// 2，围绕顶部 90-0(-90>0)，，围绕底部 0-90(要显示holder)  折叠状态 -90  -.5,.5
     /// 3，围绕顶部 90-0     折叠状态 90           -.5,0
-
     if (spinProgress == -.5) {
       ///折叠起来之后就不需要占位置了
       return;
@@ -293,16 +330,12 @@ class CarouselRenderObject extends RenderStack {
     if (spinProgress == .5) {
       return;
     }
-    var transform = _effectiveTransform;
-    if (aligmentBottom) {
-      radians = pi - radians;
-    }
-    var tt = transform..rotateX(radians);
+    updateTransform(radians);
     context.pushTransform(
       needsCompositing,
       offset,
-      tt,
-          (context, offset) {
+      _rotateTransform!,
+      (context, offset) {
         context.paintChild(lastChild!, offset);
       },
     );
@@ -314,21 +347,37 @@ class CarouselRenderObject extends RenderStack {
       return;
     }
     //只有 lastChild做了旋转
-    transform.multiply(_effectiveTransform);
+    transform.multiply(_rotateTransform!);
   }
 
   /// 围绕底部旋转
   /// 1，向下移动到底部
   /// 2，反向旋转即可(比如要围绕底部旋转30，那么应该旋转 180-30)
-  bool get aligmentBottom {
+  bool get alignmentBottom {
     return spinProgress > 0;
   }
 
-  Matrix4 get _effectiveTransform {
-    if (spinProgress <= 0) {
-      return Matrix4.identity();
+  void updateTransform(double radians) {
+    if (!alignmentBottom) {
+      /// 围绕顶部旋转
+      _rotateTransform = Matrix4.rotationX(radians);
     } else {
-      return Matrix4.translationValues(0, orignSize.height, 0);
+      /// 围绕底部旋转
+      var _transform = Matrix4.rotationX(radians);
+      final Alignment resolvedAlignment = AlignmentDirectional.bottomCenter.resolve(textDirection);
+      final Matrix4 result = Matrix4.identity();
+      Offset? translation;
+      translation = resolvedAlignment.alongSize(_originalSize);
+      result.translate(translation.dx, translation.dy);
+
+      /// 先移动到底部
+      result.multiply(_transform);
+
+      /// 执行旋转
+      result.translate(-translation.dx, -translation.dy);
+
+      ///再移回去
+      _rotateTransform = result;
     }
   }
 
@@ -336,7 +385,7 @@ class CarouselRenderObject extends RenderStack {
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     if (childCount == 2 && lastChild!.hasSize) {
       bool hited = result.addWithPaintTransform(
-        transform: _effectiveTransform,
+        transform: _rotateTransform ?? Matrix4.identity(),
         position: position,
         hitTest: (BoxHitTestResult result, Offset? position) {
           return lastChild!.hitTest(result, position: position!);
@@ -352,7 +401,6 @@ class CarouselRenderObject extends RenderStack {
 
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
-    print("hitTest > [result, position] === ${size.contains(position)}");
     if (size.contains(position)) {
       if (hitTestChildren(result, position: position)) {
         result.add(BoxHitTestEntry(this, position));
@@ -363,6 +411,30 @@ class CarouselRenderObject extends RenderStack {
   }
 }
 
+class IntervalOver1 extends Interval {
+  const IntervalOver1(double begin, double end) : super(begin, end);
+
+  @override
+  double transform(double t) {
+    t = ((t - begin) / (end - begin)).clamp(0.0, 1.1);
+    if (t == 0.0 || t == 1.0) return t;
+    return t;
+  }
+}
+
+class IntervalSafe extends Interval {
+  const IntervalSafe(double begin, double end) : super(begin, end);
+
+  @override
+  double transform(double t) {
+    t = ((t - begin) / (end - begin)).clamp(0.0, 1);
+    if (t == 0.0 || t == 1.0) return t;
+    return t;
+  }
+}
+
+/// =====================================================
+//region Carousel test
 class AnimatedCarousel extends StatefulWidget {
   final Widget child;
   final Widget? back;
@@ -387,7 +459,7 @@ class _AnimatedCarouselState extends State<AnimatedCarousel> with SingleTickerPr
     // _animation = _animationControl.drive(Tween(begin: 0, end: .5)); //首个
     // _animation = _animationControl.drive(Tween(begin: -.50,end: .5));//中间
     _animation = _animationControl.drive(Tween(begin: -.5, end: 0)); //最后
-    // _animation = _animationControl.drive(Tween(begin: -.5, end: .5)); //最后
+    // _animation = _animationControl.drive(Tween(begin: -.5, end: .5)); //
     _animationControl.repeat();
   }
 
@@ -403,7 +475,6 @@ class _AnimatedCarouselState extends State<AnimatedCarousel> with SingleTickerPr
       animation: _animation,
       builder: (BuildContext context, Widget? child) {
         return Carousel(
-          key: UniqueKey(),
           back: widget.back,
           child: widget.child,
           // spinProgress: 0.3,
@@ -413,3 +484,84 @@ class _AnimatedCarouselState extends State<AnimatedCarousel> with SingleTickerPr
     );
   }
 }
+//endregion
+
+/// ======================== demo ==================
+//region CarouselLayoutDemo
+class CarouselLayoutDemo extends StatelessWidget {
+  List<String> titles = [
+    "Fold",
+    "Arithmetic",
+    "SnowMain",
+    // "BlendokuPage",
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        body: Container(
+      padding: EdgeInsets.all(50),
+      color: Colors.yellowAccent,
+      // child: buildAnimatedCarousel(),
+      child: buildListView(),
+    ));
+  }
+
+  ListView buildListView() {
+    return ListView.builder(
+      itemCount: 3,
+      itemBuilder: (BuildContext context, int inde) {
+        return CarouselLayout(
+            key: ValueKey(inde),
+            foldState: inde != 0,
+            childs: List.generate(titles.length, (index) {
+              if (index == 0) {
+                return Container(
+                  width: 200,
+                  height: 100,
+                  child: Builder(
+                    builder: (BuildContext context) => centerText(titles[index], color: Colors.primaries[index], onPressed: () {
+                      CarouselLayout.of(context).toggle();
+                    }),
+                  ),
+                );
+              } else {
+                return centerTextButton(titles[index], color: Colors.primaries[index], onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(titles[index])));
+                });
+              }
+            }),
+            foldChild: Builder(builder: (context) {
+              return Container(
+                child: centerText("Unfold", color: Colors.primaries[6], onPressed: () {
+                  CarouselLayout.of(context).toggle();
+                }),
+              );
+            }));
+      },
+    );
+  }
+
+  Container centerText(String text, {Color? color, VoidCallback? onPressed}) {
+    return Container(
+      width: 200,
+      height: 100,
+      padding: EdgeInsets.all(30),
+      color: color,
+      child: Container(child: onPressed == null ? Text(text) : ElevatedButton(onPressed: onPressed, child: Text(text))),
+    );
+  }
+
+  Container centerTextButton(String text, {Color? color, VoidCallback? onPressed}) {
+    return Container(
+      width: 200,
+      height: 100,
+      padding: EdgeInsets.all(30),
+      color: color,
+      child: Container(
+        child: onPressed == null ? Text(text) : TextButton(onPressed: onPressed, child: Text(text)),
+      ),
+    );
+  }
+}
+//endregion
